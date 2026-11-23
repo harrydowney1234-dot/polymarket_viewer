@@ -75,7 +75,7 @@ a{color:var(--strip)}:root[data-theme=dark] a{color:#8fa6ff}
       <button id="bFolder">Load a folder</button>
       <button id="bClear">Clear</button>
     </div>
-    <small id="dropMsg">Or drag .jsonl files onto this page. Files are read in your browser and never uploaded.</small>
+    <small id="dropMsg">Load one or more .jsonl files (hold Ctrl to pick several), or drag them here. Both Market A and B choose from everything loaded. Files are read in your browser and never uploaded.</small>
     <input type="file" id="inFiles" multiple accept=".jsonl,.json,.txt" hidden>
     <input type="file" id="inFolder" webkitdirectory multiple hidden>
   </div>
@@ -162,7 +162,7 @@ async function loadFiles(list){
   for(const f of fs){const n=parseText(await f.text());fileNames.push(`${f.name} (${n.toLocaleString()} rows)`)}
   for(const m of M.values())m.tr.sort((a,b)=>a.t-b.t);
   $('dropMsg').textContent='Files are read in your browser and never uploaded. Add more files any time.';
-  fillSelects(true);
+  fillSelects(false);
 }
 function reset(){M=new Map();W=new Map();seen=new Set();fileNames=[];win=null}
 let sampleOn=false;
@@ -187,6 +187,7 @@ function fillSelects(pickDefault){
   if(M.has(prevA)&&!pickDefault)$('selA').value=prevA;
   else if(M.size){$('selA').value=[...M.values()].sort((a,b)=>b.tr.length-a.tr.length)[0].id}
   $('selB').value=M.has(prevB)&&prevB!==$('selA').value?prevB:'';
+  if(!pickDefault&&M.has(prevA)&&(prevB===''||M.has(prevB))){$('files').textContent=fileNames.length?'Loaded: '+fileNames.join(' · ')+` · ${M.size} markets`:'';render();return}
   $('files').textContent=fileNames.length?'Loaded: '+fileNames.join(' · ')+` · ${M.size} markets`:'';
   win=null;render();
 }
