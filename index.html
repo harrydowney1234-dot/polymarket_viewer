@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polymarket trade viewer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE: a trading desk's datasheet - exact, calm, dense, no decoration.
+   IDEA: an exchange tape reader: load raw fills, read two markets side by side.
+   PICTURE: the overlaid probability chart, with volume and order flow on the same time axis.
+   COLOUR and TYPE: cobalt title strip, white sheet, pale cobalt zones; A = blue, B = orange. Space Grotesk + Inter.
+   LAYOUT: strip, controls row, A/B figures, three stacked charts sharing one x-axis, trader table. */
+:root{color-scheme:light dark;
+  --bg:light-dark(#ffffff,#0a0d18);--ink:light-dark(#0b0b0b,#eef0f6);--ink2:light-dark(#52514e,#b8bdd0);--mute:light-dark(#77766f,#8a90a6);
+  --zone:light-dark(#eef2ff,#121831);--line:light-dark(#d9def0,#26304f);--grid:light-dark(#e8ebf5,#1c2442);
+  --strip:#1240e0;--a:light-dark(#2a78d6,#3987e5);--b:light-dark(#eb6834,#d95926);--sel:light-dark(rgba(18,64,224,.10),rgba(120,150,255,.16))}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Inter,system-ui,sans-serif;overflow-x:clip}
+h1,h2,.num{font-family:"Space Grotesk",Inter,sans-serif}
+.strip{background:var(--strip);color:#fff;padding:18px max(5vw,16px)}
+.strip h1{margin:0;font-size:clamp(26px,3.4vw,38px);line-height:1.05;font-weight:600;text-wrap:balance}
+.strip p{margin:6px 0 0;color:#dbe3ff;font-size:15px;max-width:70ch}
+.band{padding:18px max(5vw,16px);max-width:1340px;margin:0 auto}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:12px;align-items:end}
+label{display:block;font-size:13px;color:var(--ink2);margin-bottom:4px}
+select,button,input[type=file]{font:inherit;font-size:16px;min-height:44px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:8px 10px;width:100%}
+button{cursor:pointer;background:var(--zone);font-weight:500}
+button:focus-visible,select:focus-visible{outline:3px solid var(--strip);outline-offset:2px}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:14px;background:var(--zone);display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.drop.on{border-color:var(--strip)}
+.drop .btns{display:flex;gap:8px;flex-wrap:wrap}.drop .btns button{width:auto}
+.drop small{color:var(--ink2);font-size:14px;flex:1 1 260px}
+.chip{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:12px}
+.card{background:var(--zone);border-radius:10px;padding:12px 14px}
+.card h2{font-size:15px;margin:0 0 8px;font-weight:600;line-height:1.3}
+.kv{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 12px}
+.kv div span{display:block;font-size:13px;color:var(--ink2)}
+.kv div b{font-family:"Space Grotesk",sans-serif;font-size:20px;font-weight:600;white-space:nowrap}
+.panel{margin-top:14px}
+.panel h2{font-size:17px;margin:0 0 2px;font-weight:600}
+.panel p.sub{margin:0 0 6px;font-size:14px;color:var(--ink2)}
+.fig{position:relative;min-height:300px}.fig.s{min-height:170px}
+.fig>svg{position:absolute;inset:0;width:100%;height:100%;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.tip{position:absolute;pointer-events:none;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px;line-height:1.45;box-shadow:0 4px 14px rgba(0,0,0,.12);display:none;z-index:2;white-space:nowrap}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:14px;color:var(--ink2);margin-bottom:4px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-top:14px}
+.bar button{width:auto}
+.note{font-size:13px;color:var(--mute)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left}
+th{font-weight:600;color:var(--ink2);font-size:13px}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+a{color:var(--strip)}:root[data-theme=dark] a{color:#8fa6ff}
+.files{font-size:13px;color:var(--ink2);margin-top:8px}
+.scroll{overflow-x:auto}
+@media(max-width:600px){table{font-size:13px}.stack thead{display:none}.stack tr{display:grid;padding-block:10px}.stack td{display:flow-root;border:0;padding:3px 0;padding-inline-start:8em;text-align:start}.stack td::before{content:attr(data-l);float:inline-start;width:7.5em;margin-inline-start:-8em;white-space:normal;color:var(--ink2)}.stack td:empty{display:none}.kv{grid-template-columns:repeat(2,minmax(0,1fr))}.kv b{font-size:17px!important;white-space:normal!important}}
+@media(prefers-color-scheme:dark){:root:where(:not([data-theme=light])) .tip{box-shadow:none}}
+</style>
+<script>new MutationObserver(()=>{for(const c of document.querySelectorAll('.stack td:not([data-l])')){let i=0,p=c;while(p=p.previousElementSibling)i+=p.colSpan;c.dataset.l=c.closest('table').rows[0].cells[i]?.textContent||''}}).observe(document,{childList:true,subtree:true})</script>
+</head>
+<body>
+<header class="strip">
+  <h1>Polymarket trade viewer</h1>
+  <p>Load the .jsonl trade files from your download folder, pick a market, and overlay a second one to compare.</p>
+</header>
+
+<section class="band">
+  <div class="drop" id="drop">
+    <div class="btns">
+      <button id="bFiles">Load files</button>
+      <button id="bFolder">Load a folder</button>
+      <button id="bClear">Clear</button>
+    </div>
+    <small id="dropMsg">Or drag .jsonl files onto this page. Files are read in your browser and never uploaded.</small>
+    <input type="file" id="inFiles" multiple accept=".jsonl,.json,.txt" hidden>
+    <input type="file" id="inFolder" webkitdirectory multiple hidden>
+  </div>
+  <div class="files" id="files"></div>
+
+  <div class="controls" style="margin-top:14px">
+    <div><label for="selA"><span class="chip" style="background:var(--a)"></span>Market A</label><select id="selA"></select></div>
+    <div><label for="selB"><span class="chip" style="background:var(--b)"></span>Market B (overlay)</label><select id="selB"></select></div>
+    <div><label for="selBk">Time bucket</label><select id="selBk">
+      <option value="0">Auto</option><option value="60">1 minute</option><option value="300">5 minutes</option><option value="900">15 minutes</option><option value="3600">1 hour</option><option value="14400">4 hours</option><option value="86400">1 day</option></select></div>
+    <div><label for="selTz">Time zone</label><select id="selTz">
+      <option value="UTC">UTC</option><option value="America/New_York">New York (ET)</option><option value="Europe/Rome">Milan</option></select></div>
+    <div><label for="selY">Price axis</label><select id="selY"><option value="fit">Fit to data</option><option value="full">0 to 100%</option></select></div>
+  </div>
+
+  <div class="figs" id="figs" style="margin-top:14px"></div>
+
+  <div class="bar">
+    <div class="note" id="win"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button id="bReset">Reset zoom</button><button id="bCopy">Copy chart data (CSV)</button></div>
+  </div>
+
+  <div class="panel">
+    <h2>Implied probability</h2>
+    <p class="sub">Volume-weighted price per bucket, as the probability of the first outcome (Yes). Drag across any chart to zoom in.</p>
+    <div class="legend" id="lg1"></div>
+    <div class="fig" id="f1"><svg id="s1"></svg><div class="tip" id="t1"></div></div>
+  </div>
+  <div class="panel">
+    <h2>Volume</h2>
+    <p class="sub">Dollars traded per bucket (shares × price).</p>
+    <div class="fig s" id="f2"><svg id="s2"></svg><div class="tip" id="t2"></div></div>
+  </div>
+  <div class="panel">
+    <h2>Cumulative net order flow</h2>
+    <p class="sub">Running total of dollars betting on Yes (buy Yes or sell No) minus dollars betting against it, from the start of the window.</p>
+    <div class="fig s" id="f3"><svg id="s3"></svg><div class="tip" id="t3"></div></div>
+  </div>
+
+  <div class="panel">
+    <h2>Largest traders in this window</h2>
+    <p class="sub">Ranked by dollars traded across the selected markets. Net Yes is positive for traders betting on Yes.</p>
+    <div class="scroll"><table class="stack" id="tbl"><thead><tr><th>Trader</th><th>Market</th><th class="n">Trades</th><th class="n">Volume</th><th class="n">Net Yes</th><th class="n">Avg Yes price</th><th>First trade</th></tr></thead><tbody></tbody></table></div>
+  </div>
+  <p class="note" id="foot">Sample loaded: the Strategy case, MicroStrategy sells any Bitcoin in 2025 vs. Will China unban Bitcoin in 2025, 13 to 15 Nov 2025 UTC.</p>
+</section>
+
+<script>
+{
+const $=id=>document.getElementById(id);
+const NS='http://www.w3.org/2000/svg';
+// ---------- data store ----------
+let M=new Map();          // condition_id -> {id,title,event,o0,tr:[]}
+let W=new Map();          // wallet -> display name
+let seen=new Set(), fileNames=[];
+let win=null, hoverT=null, drag=null;
+
+function addTrade(r){
+  const cid=r.condition_id||r.conditionId; const ts=+r.timestamp; const price=+r.price; const size=+r.size;
+  if(!cid||!ts||!(price>0&&price<1)||!(size>0))return;
+  const key=[r.transaction_hash||r.transactionHash,r.token_id||r.asset,r.side,size,price,ts,r.proxy_wallet||r.proxyWallet].join('|');
+  if(seen.has(key))return; seen.add(key);
+  let m=M.get(cid); if(!m){m={id:cid,title:r.title||cid,event:r.event_slug||r.eventSlug||'',o0:null,tr:[]};M.set(cid,m)}
+  const oi=+(r.outcome_index??r.outcomeIndex??(String(r.outcome).toLowerCase()==='yes'?0:1));
+  if(oi===0&&r.outcome)m.o0=r.outcome;
+  const p0=oi===0?price:1-price;
+  const buy=String(r.side).toUpperCase().startsWith('B');
+  const flow=(buy===(oi===0))?1:-1;
+  const w=r.proxy_wallet||r.proxyWallet||'';
+  if(w&&!W.has(w))W.set(w,r.name||r.pseudonym||'');
+  m.tr.push({t:ts,p:p0,s:size,u:price*size,f:flow,w});
+}
+function parseText(txt){
+  let n=0;const t=txt.trim();
+  if(t.startsWith('[')){try{for(const r of JSON.parse(t)){addTrade(r);n++}}catch(e){}return n}
+  for(const line of t.split('\n')){if(!line)continue;try{addTrade(JSON.parse(line));n++}catch(e){}}
+  return n;
+}
+async function loadFiles(list){
+  const fs=[...list].filter(f=>/\.(jsonl|json|txt)$/i.test(f.name)&&f.size>0);
+  if(!fs.length){$('dropMsg').textContent='No non-empty .jsonl files found there.';return}
+  if(sampleOn){reset();sampleOn=false;$('foot').textContent=''}
+  $('dropMsg').textContent=`Reading ${fs.length} file${fs.length>1?'s':''}...`;
+  for(const f of fs){const n=parseText(await f.text());fileNames.push(`${f.name} (${n.toLocaleString()} rows)`)}
+  for(const m of M.values())m.tr.sort((a,b)=>a.t-b.t);
+  $('dropMsg').textContent='Files are read in your browser and never uploaded. Add more files any time.';
+  fillSelects(true);
+}
+function reset(){M=new Map();W=new Map();seen=new Set();fileNames=[];win=null}
+let sampleOn=false;
+async function loadSample(){
+  try{const d=await (await fetch('sample.json')).json();
+    for(const r of d.r){const m=d.m[r[0]],w=d.w[r[7]];
+      addTrade({condition_id:m[0],title:m[1],event_slug:m[2],timestamp:r[1],price:r[2],size:r[3],side:r[4]==='B'?'BUY':'SELL',outcome:r[5],outcome_index:r[6],proxy_wallet:w[0],name:w[1],transaction_hash:r[8]+'#'+r[1]})}
+    for(const m of M.values())m.tr.sort((a,b)=>a.t-b.t);
+    sampleOn=true;fileNames=['Sample: Strategy case (2 markets)'];fillSelects(true);
+    const ids=[...M.keys()];if(ids.length>1){$('selA').value=ids[0];$('selB').value=ids[1];win=null;render()}
+  }catch(e){$('foot').textContent='';fillSelects(true)}
+}
+// ---------- selects ----------
+function fillSelects(pickDefault){
+  const prevA=$('selA').value,prevB=$('selB').value;
+  const groups=new Map();
+  for(const m of M.values()){const g=m.event||'other';if(!groups.has(g))groups.set(g,[]);groups.get(g).push(m)}
+  const opt=m=>`<option value="${m.id}">${esc(m.title)} (${m.tr.length.toLocaleString()})</option>`;
+  const html=[...groups.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([g,ms])=>`<optgroup label="${esc(g)}">${ms.sort((a,b)=>a.title.localeCompare(b.title,undefined,{numeric:true})).map(opt).join('')}</optgroup>`).join('');
+  $('selA').innerHTML=M.size?html:'<option value="">Load files to begin</option>';
+  $('selB').innerHTML='<option value="">None</option>'+html;
+  if(M.has(prevA)&&!pickDefault)$('selA').value=prevA;
+  else if(M.size){$('selA').value=[...M.values()].sort((a,b)=>b.tr.length-a.tr.length)[0].id}
+  $('selB').value=M.has(prevB)&&prevB!==$('selA').value?prevB:'';
+  $('files').textContent=fileNames.length?'Loaded: '+fileNames.join(' · ')+` · ${M.size} markets`:'';
+  win=null;render();
+}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+// ---------- maths ----------
+const sel=()=>[M.get($('selA').value),M.get($('selB').value)].filter(Boolean);
+function extent(ms){let a=Infinity,b=-Infinity;for(const m of ms)if(m.tr.length){a=Math.min(a,m.tr[0].t);b=Math.max(b,m.tr[m.tr.length-1].t)}return isFinite(a)?[a,b+1]:null}
+function inWin(m){const[a,b]=win;return m.tr.filter(x=>x.t>=a&&x.t<b)}
+function bucketSize(){const v=+$('selBk').value;if(v)return v;const span=win[1]-win[0];for(const b of[60,300,900,3600,14400,86400])if(span/b<=360)return b;return 86400}
+function buckets(trs,bk){const map=new Map();
+  for(const x of trs){const k=Math.floor(x.t/bk)*bk;let o=map.get(k);if(!o){o={t:k,pv:0,s:0,u:0,n:0,f:0};map.set(k,o)}o.pv+=x.p*x.s;o.s+=x.s;o.u+=x.u;o.n++;o.f+=x.f*x.u}
+  return[...map.values()].sort((a,b)=>a.t-b.t).map(o=>({...o,p:o.pv/o.s}))}
+const pct=v=>(v*100).toFixed(v<0.1||v>0.9?2:1)+'%';
+const usd=v=>{const a=Math.abs(v),s=v<-0.005?'-':'';if(a<0.005)return'$0';return a>=1e6?s+'$'+(a/1e6).toFixed(2)+'M':a>=1e4?s+'$'+(a/1e3).toFixed(1)+'k':s+'$'+a.toFixed(a<100?2:0)};
+function fmt(t,withDate){const tz=$('selTz').value;const d=new Date(t*1000);
+  const time=d.toLocaleTimeString('en-GB',{timeZone:tz,hour:'2-digit',minute:'2-digit'});
+  const date=d.toLocaleDateString('en-GB',{timeZone:tz,day:'numeric',month:'short'});
+  return withDate===false?time:withDate==='date'?date:date+' '+time}
+// ---------- render ----------
+let series=[];
+function render(){
+  const ms=sel();
+  if(!ms.length){series=[];for(const id of['s1','s2','s3'])$(id).innerHTML='';$('figs').innerHTML='';$('tbl').tBodies[0].innerHTML='';$('win').textContent='';$('lg1').innerHTML='';return}
+  if(!win)win=extent(ms);
+  const bk=bucketSize();
+  series=ms.map((m,i)=>{const tr=inWin(m);const b=buckets(tr,bk);let c=0;for(const o of b){c+=o.f;o.cf=c}return{m,tr,b,col:i?'var(--b)':'var(--a)',tag:i?'B':'A'}});
+  $('win').textContent=`Window: ${fmt(win[0])} to ${fmt(win[1])} (${$('selTz').selectedOptions[0].text}) · bucket ${labelBk(bk)}`;
+  $('lg1').innerHTML=series.map(s=>`<span><span class="chip" style="background:${s.col}"></span>${s.tag}: ${esc(s.m.title)}${s.m.o0&&s.m.o0!=='Yes'?` (P of ${esc(s.m.o0)})`:''}</span>`).join('');
+  figs();table();drawAll();
+}
+const labelBk=b=>({60:'1 min',300:'5 min',900:'15 min',3600:'1 hour',14400:'4 hours',86400:'1 day'}[b]);
+function figs(){
+  $('figs').innerHTML=series.map(s=>{const tr=s.tr;if(!tr.length)return`<div class="card"><h2><span class="chip" style="background:${s.col}"></span>${esc(s.m.title)}</h2><div class="note">No trades in this window.</div></div>`;
+    let hi=0,lo=1,u=0,f=0;const ws=new Set();for(const x of tr){hi=Math.max(hi,x.p);lo=Math.min(lo,x.p);u+=x.u;f+=x.f*x.u;ws.add(x.w)}
+    const p0=tr[0].p,p1=tr[tr.length-1].p,d=(p1-p0)*100;
+    return`<div class="card"><h2><span class="chip" style="background:${s.col}"></span>${esc(s.m.title)}</h2><div class="kv">
+    <div><span>Start → end</span><b class="num">${pct(p0)} → ${pct(p1)}</b></div>
+    <div><span>Change</span><b class="num">${d>=0?'+':''}${d.toFixed(1)} pts</b></div>
+    <div><span>Low / high</span><b class="num">${pct(lo)} / ${pct(hi)}</b></div>
+    <div><span>Trades</span><b class="num">${tr.length.toLocaleString()}</b></div>
+    <div><span>Volume</span><b class="num">${usd(u)}</b></div>
+    <div><span>Net Yes flow</span><b class="num">${usd(f)}</b></div></div></div>`}).join('');
+}
+function table(){
+  const agg=new Map();
+  for(const s of series)for(const x of s.tr){const k=s.tag+x.w;let o=agg.get(k);if(!o){o={w:x.w,tag:s.tag,col:s.col,n:0,u:0,f:0,pv:0,sz:0,t:x.t};agg.set(k,o)}o.n++;o.u+=x.u;o.f+=x.f*x.u;o.pv+=x.p*x.s;o.sz+=x.s;o.t=Math.min(o.t,x.t)}
+  const rows=[...agg.values()].sort((a,b)=>b.u-a.u).slice(0,15);
+  $('tbl').tBodies[0].innerHTML=rows.length?rows.map(o=>{let nm=W.get(o.w)||'';if(!nm||nm.length>22||/^0x[0-9a-f]{20,}/i.test(nm))nm=o.w.slice(0,6)+'…'+o.w.slice(-4);
+    return`<tr><td><a href="https://polymarket.com/profile/${o.w}" target="_blank" rel="noopener">${esc(nm)}</a></td><td><span class="chip" style="background:${o.col}"></span>${o.tag}</td><td class="n">${o.n}</td><td class="n">${usd(o.u)}</td><td class="n">${usd(o.f)}</td><td class="n">${pct(o.pv/o.sz)}</td><td style="white-space:nowrap">${fmt(o.t)}</td></tr>`}).join(''):'<tr><td colspan="7" class="note">No trades in this window.</td></tr>';
+}
+// ---------- charts ----------
+const PAD={l:58,r:14,t:10,b:28};
+function tickStep(span,W){const want=Math.max(2,Math.floor(W/120));for(const s of[60,300,900,1800,3600,7200,10800,21600,43200,86400,172800,604800,2592000])if(span/s<=want)return s;return 2592000}
+function niceY(lo,hi,n){const span=hi-lo||1;const raw=span/n;const p=10**Math.floor(Math.log10(raw));const st=[1,2,2.5,5,10].map(k=>k*p).find(k=>k>=raw);const out=[];for(let v=Math.ceil(lo/st)*st;v<=hi+1e-9;v+=st)out.push(+v.toFixed(10));return out}
+function el(tag,at,txt){const e=document.createElementNS(NS,tag);for(const k in at)e.setAttribute(k,at[k]);if(txt!=null)e.textContent=txt;return e}
+function frame(svg){const W=svg.clientWidth,H=svg.clientHeight;svg.innerHTML='';svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  const x=t=>PAD.l+(t-win[0])/(win[1]-win[0])*(W-PAD.l-PAD.r);return{W,H,x,iw:W-PAD.l-PAD.r,ih:H-PAD.t-PAD.b}}
+function xAxis(svg,f){const st=tickStep(win[1]-win[0],f.iw);let lastDate='';const g=el('g',{});
+  for(let t=Math.ceil(win[0]/st)*st;t<win[1];t+=st){const X=f.x(t);g.append(el('line',{x1:X,x2:X,y1:PAD.t,y2:f.H-PAD.b,stroke:'var(--grid)'}));
+    const dt=fmt(t,'date');let lab=st>=86400?dt:(dt!==lastDate?dt+' '+fmt(t,false):fmt(t,false));lastDate=dt;
+    if(f.W<520&&st<86400)lab=fmt(t,false);
+    g.append(el('text',{x:X,y:f.H-8,'text-anchor':'middle','font-size':12,fill:'var(--mute)'},lab))}
+  svg.append(g)}
+function yAxis(svg,f,ticks,y,fm){const g=el('g',{});for(const v of ticks){const Y=y(v);g.append(el('line',{x1:PAD.l,x2:f.W-PAD.r,y1:Y,y2:Y,stroke:v===0?'var(--mute)':'var(--grid)'}));g.append(el('text',{x:PAD.l-8,y:Y+4,'text-anchor':'end','font-size':12,fill:'var(--mute)'},fm(v)))}svg.append(g)}
+function overlay(svg,f){
+  if(hoverT!=null&&hoverT>=win[0]&&hoverT<win[1]){const X=f.x(hoverT);svg.append(el('line',{x1:X,x2:X,y1:PAD.t,y2:f.H-PAD.b,stroke:'var(--ink2)','stroke-dasharray':'3 3'}))}
+  if(drag&&drag.x1!=null){const a=Math.min(drag.x0,drag.x1),b=Math.max(drag.x0,drag.x1);svg.append(el('rect',{x:a,y:PAD.t,width:b-a,height:f.ih,fill:'var(--sel)',stroke:'var(--strip)'}))}}
+function line(svg,pts,col){if(!pts.length)return;const d=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+','+p[1].toFixed(1)).join('');
+  svg.append(el('path',{d,fill:'none',stroke:col,'stroke-width':2,'stroke-linejoin':'round'}));
+  if(pts.length<40)for(const p of pts)svg.append(el('circle',{cx:p[0],cy:p[1],r:3,fill:col}))}
+function draw1(){const svg=$('s1');if(!series.length)return;const f=frame(svg);
+  let lo=1,hi=0;for(const s of series)for(const o of s.b){lo=Math.min(lo,o.p);hi=Math.max(hi,o.p)}
+  if($('selY').value==='full'||hi<lo){lo=0;hi=1}else{const pd=Math.max((hi-lo)*0.1,0.005);lo=Math.max(0,lo-pd);hi=Math.min(1,hi+pd)}
+  const y=v=>PAD.t+(1-(v-lo)/(hi-lo))*f.ih;
+  yAxis(svg,f,niceY(lo,hi,5),y,v=>(v*100).toFixed(hi-lo<0.05?1:0)+'%');xAxis(svg,f);
+  for(const s of series)line(svg,s.b.map(o=>[f.x(o.t+bkNow()/2),y(o.p)]),s.col);overlay(svg,f)}
+function draw2(){const svg=$('s2');if(!series.length)return;const f=frame(svg);const bk=bkNow();
+  let hi=0;for(const s of series)for(const o of s.b)hi=Math.max(hi,o.u);hi=hi||1;
+  const y=v=>PAD.t+(1-v/hi)*f.ih;yAxis(svg,f,niceY(0,hi,3),y,usd);xAxis(svg,f);
+  const bw=Math.max(1,f.iw*bk/(win[1]-win[0])/series.length-1);
+  series.forEach((s,i)=>{for(const o of s.b){const X=f.x(o.t)+i*(bw+1),Y=y(o.u),h=f.H-PAD.b-Y;if(h<=0)continue;
+    svg.append(el('rect',{x:X,y:Y,width:bw,height:h,rx:Math.min(2,bw/2),fill:s.col}))}});overlay(svg,f)}
+function draw3(){const svg=$('s3');if(!series.length)return;const f=frame(svg);
+  let lo=0,hi=0;for(const s of series)for(const o of s.b){lo=Math.min(lo,o.cf);hi=Math.max(hi,o.cf)}if(hi===lo)hi=lo+1;
+  const pd=(hi-lo)*0.08;lo-=pd;hi+=pd;const y=v=>PAD.t+(1-(v-lo)/(hi-lo))*f.ih;
+  yAxis(svg,f,niceY(lo,hi,4),y,usd);xAxis(svg,f);
+  for(const s of series){const pts=[];let prev=0;for(const o of s.b){pts.push([f.x(o.t),y(prev)]);pts.push([f.x(o.t+bkNow()),y(o.cf)]);prev=o.cf}line(svg,pts,s.col)}overlay(svg,f)}
+let _bk=60;const bkNow=()=>_bk;
+function drawAll(){if(!series.length)return;_bk=bucketSize();draw1();draw2();draw3()}
+const ro=new ResizeObserver(()=>drawAll());for(const id of['f1','f2','f3'])ro.observe($(id));
+// ---------- interaction: hover tooltip + drag zoom ----------
+function tFromX(svg,cx){const r=svg.getBoundingClientRect();const W=r.width;const fx=(cx-r.left-PAD.l)/(W-PAD.l-PAD.r);return win[0]+fx*(win[1]-win[0])}
+function tipFor(n,t,cx,cy){const tip=$('t'+n);const bk=bkNow();const k=Math.floor(t/bk)*bk;
+  const rows=series.map(s=>{const o=s.b.find(z=>z.t===k);
+    const v=!o?'no trades':n===1?`${pct(o.p)} · ${o.n} trade${o.n===1?'':'s'}`:n===2?`${usd(o.u)} · ${o.n} trade${o.n===1?'':'s'}`:`net ${usd(o.cf)}`;
+    if(n===3&&!o){let c=null;for(const z of s.b){if(z.t>k)break;c=z.cf}return`<div><span class="chip" style="background:${s.col}"></span>${s.tag}: ${c==null?'no trades yet':'net '+usd(c)}</div>`}
+    return`<div><span class="chip" style="background:${s.col}"></span>${s.tag}: ${v}</div>`}).join('');
+  tip.innerHTML=`<div style="font-weight:600">${fmt(k)}${bk>60?' + '+labelBk(bk):''}</div>${rows}`;tip.style.display='block';
+  const box=$('f'+n).getBoundingClientRect();let L=cx-box.left+14;if(L+tip.offsetWidth>box.width)L=cx-box.left-tip.offsetWidth-14;tip.style.left=Math.max(0,L)+'px';tip.style.top=Math.max(0,cy-box.top-10)+'px'}
+for(const n of[1,2,3]){const svg=$('s'+n);
+  svg.addEventListener('pointermove',e=>{if(!series.length)return;const r=svg.getBoundingClientRect();const t=tFromX(svg,e.clientX);
+    if(drag&&drag.n===n){drag.x1=Math.max(PAD.l,Math.min(r.width-PAD.r,e.clientX-r.left))}
+    if(t<win[0]||t>=win[1]){hoverT=null;$('t'+n).style.display='none'}else{hoverT=t;tipFor(n,t,e.clientX,e.clientY)}drawAll()});
+  svg.addEventListener('pointerleave',()=>{hoverT=null;$('t'+n).style.display='none';if(!drag)drawAll()});
+  svg.addEventListener('pointerdown',e=>{if(!series.length||e.pointerType==='touch')return;const r=svg.getBoundingClientRect();drag={n,x0:e.clientX-r.left,x1:null};svg.setPointerCapture(e.pointerId)});
+  svg.addEventListener('pointerup',e=>{if(!drag)return;const d=drag;drag=null;if(d.x1!=null&&Math.abs(d.x1-d.x0)>6){const r=svg.getBoundingClientRect();
+    const a=tFromX(svg,r.left+Math.min(d.x0,d.x1)),b=tFromX(svg,r.left+Math.max(d.x0,d.x1));if(b-a>=60){win=[Math.floor(a),Math.ceil(b)];render();return}}drawAll()});
+  svg.addEventListener('dblclick',()=>{win=null;render()})}
+// ---------- controls ----------
+$('bFiles').onclick=()=>$('inFiles').click();$('bFolder').onclick=()=>$('inFolder').click();
+$('inFiles').onchange=e=>{loadFiles(e.target.files);e.target.value=''};$('inFolder').onchange=e=>{loadFiles(e.target.files);e.target.value=''};
+$('bClear').onclick=()=>{reset();sampleOn=false;$('foot').textContent='';fillSelects(true)};
+$('selA').onchange=()=>{if($('selB').value===$('selA').value)$('selB').value='';win=null;render()};
+$('selB').onchange=()=>{if($('selB').value===$('selA').value)$('selB').value='';win=null;render()};
+for(const id of['selBk','selTz','selY'])$(id).onchange=()=>render();
+$('bReset').onclick=()=>{win=null;render()};
+$('bCopy').onclick=async()=>{if(!series.length)return;const bk=bkNow();const keys=new Set();for(const s of series)for(const o of s.b)keys.add(o.t);
+  const head=['time_utc','bucket_seconds',...series.flatMap(s=>[s.tag+'_prob',s.tag+'_volume_usd',s.tag+'_trades',s.tag+'_net_yes_cum_usd'])];
+  const maps=series.map(s=>new Map(s.b.map(o=>[o.t,o])));
+  const lines=[head.join(',')].concat([...keys].sort((a,b)=>a-b).map(t=>[new Date(t*1000).toISOString().slice(0,19).replace('T',' '),bk,...maps.flatMap(m=>{const o=m.get(t);return o?[o.p.toFixed(4),o.u.toFixed(2),o.n,o.cf.toFixed(2)]:['','','','']})].join(',')));
+  try{await navigator.clipboard.writeText(lines.join('\n'));$('bCopy').textContent='Copied'}catch(e){$('bCopy').textContent='Copy blocked'}setTimeout(()=>$('bCopy').textContent='Copy chart data (CSV)',1600)};
+const drop=$('drop');
+addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('on')});addEventListener('dragleave',e=>{if(!e.relatedTarget)drop.classList.remove('on')});
+addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('on');loadFiles(e.dataTransfer.files)});
+fillSelects(true);loadSample();
+}
+</script>
+</body>
+</html>
