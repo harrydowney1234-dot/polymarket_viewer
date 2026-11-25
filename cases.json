@@ -1,0 +1,26 @@
+[
+  {
+    "label": "Diomande transfer, summer 2026 (all 9 teams)",
+    "files": [
+      "data/diomande/real-madrid.jsonl",
+      "data/diomande/stay-rb-leipzig.jsonl",
+      "data/diomande/paris-saint-germain.jsonl",
+      "data/diomande/liverpool.jsonl",
+      "data/diomande/manchester-city.jsonl",
+      "data/diomande/arsenal.jsonl",
+      "data/diomande/chelsea.jsonl",
+      "data/diomande/barcelona.jsonl",
+      "data/diomande/bayern-munich.jsonl"
+    ],
+    "a": "join Real Madrid",
+    "b": "stay at RB Leipzig",
+    "note": "Polymarket 'Where will Yan Diomande transfer?', all trades 16 Jun to 6 Aug 2026. Key dates (UTC): 26 Jul Fabrizio Romano 'Here we go' (Real Madrid); 3 Aug RB Leipzig's Marcel Schäfer denies an agreement; 6 Aug Real Madrid announce the signing."
+  },
+  {
+    "label": "Strategy rumour, 14 Nov 2025 (sample)",
+    "files": ["sample.json"],
+    "a": "MicroStrategy",
+    "b": "China",
+    "note": "MicroStrategy sells any Bitcoin in 2025? vs. Will China unban Bitcoin in 2025? (control), trades 13 to 15 Nov 2025 UTC. The rumour peak is at 11:07 UTC on 14 Nov."
+  }
+]
